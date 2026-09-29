@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17202a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AGRINOVA">
+<link rel="manifest" href="manifest.json">
+<title>AGRINOVA</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#eef2f5;color:#17202a}
+.wrap{max-width:760px;margin:auto;padding:14px}.header,.panel,.card{background:#fff;border-radius:18px;padding:18px;margin-bottom:13px;box-shadow:0 4px 15px rgba(0,0,0,.08)}
+.header{background:#17202a;color:#fff}.header h1{margin:0 0 4px;font-size:28px}.header p{margin:0;opacity:.8}
+.status{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:18px;background:#555;font-weight:bold;font-size:13px;margin-top:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:#bbb}.online{background:#197a3a}.online .dot{background:#8cffaa}.offline{background:#8a3030}.offline .dot{background:#ff8b8b}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:13px}.tab{background:#dfe5e9;color:#17202a}.tab.active{background:#17202a;color:#fff}
+.section{display:none}.section.active{display:block}
+.login h2{margin-top:0}label{display:block;font-size:13px;font-weight:bold;margin:9px 0 5px}
+input{width:100%;padding:12px;border:1px solid #ccd3d9;border-radius:10px;font-size:16px}
+button{border:0;border-radius:10px;padding:12px 15px;font-size:14px;font-weight:bold;cursor:pointer}
+.connect{margin-top:12px;width:100%;background:#f5b400}.logout{background:#e7eaed}
+.headrow{display:flex;justify-content:space-between;align-items:center}.relay-name{font-size:22px;font-weight:bold}
+.state{padding:7px 11px;border-radius:16px;font-weight:bold;font-size:13px;background:#e7eaed;color:#555}.state.on{background:#b8f0c7;color:#155724}
+.remaining{font-size:34px;font-weight:bold;margin:13px 0}.remaining small{font-size:14px;font-weight:normal;color:#666}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px}.start{background:#1f9d55;color:#fff}.stop{background:#d64545;color:#fff}
+.timerow{display:flex;gap:7px;margin-top:8px}.timerow input{flex:1}.save{background:#e8edf1}
+.msg{min-height:18px;margin-top:8px;font-size:12px;color:#667}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#f3f5f6;border-radius:12px;padding:13px}.stat b{display:block;font-size:21px;margin-top:4px}
+.event{border-bottom:1px solid #e3e7ea;padding:10px 0;font-size:13px}.event:last-child{border-bottom:0}
+.small{font-size:12px;color:#667;line-height:1.45}.danger{background:#d64545;color:white}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media(max-width:430px){.wrap{padding:9px}.card,.panel,.header{padding:14px}.remaining{font-size:30px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>AGRINOVA</h1><p>Uzaktan Röle Kontrol Paneli</p>
+    <div id="status" class="status"><span class="dot"></span><span id="statusText">Bağlı değil</span></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('control',this)">KONTROL</button>
+    <button class="tab" onclick="showTab('stats',this)">İSTATİSTİK</button>
+    <button class="tab" onclick="showTab('history',this)">GEÇMİŞ</button>
+  </div>
+
+  <div id="login" class="panel">
+    <h2>HiveMQ Bağlantısı</h2>
+    <label>Kullanıcı adı</label>
+    <input id="username" value="agrinova_phone" autocomplete="username">
+    <label>HiveMQ şifresi</label>
+    <input id="password" type="password" placeholder="HiveMQ telefon şifresi" autocomplete="current-password">
+    <label style="display:flex;align-items:center;gap:8px;font-weight:normal;margin-top:10px">
+      <input id="remember" type="checkbox" style="width:auto"> Bu telefonda şifreyi hatırla
+    </label>
+    <button class="connect" onclick="connectMQTT()">BAĞLAN</button>
+    <div id="loginMsg" class="msg"></div>
+    <div class="small">“Şifreyi hatırla” seçilirse bu telefonda tarayıcı hafızasına kaydedilir.</div>
+  </div>
+
+  <div id="control" class="section active">
+    <div id="cards"></div>
+  </div>
+
+  <div id="stats" class="section">
+    <div class="panel">
+      <h2>Çalışma İstatistikleri</h2>
+      <div class="stats">
+        <div class="stat">Bugün<b id="todayTotal">0 dk</b></div>
+        <div class="stat">Son 7 gün<b id="weekTotal">0 dk</b></div>
+      </div>
+      <p class="small">Bu sürüm, panel açıkken alınan ON/OFF olaylarını yerel olarak kaydeder. Bir sonraki ESP32 sürümünde sayaçları cihaz hafızasına da taşıyacağız.</p>
+      <button class="danger" onclick="clearHistory()">GEÇMİŞİ TEMİZLE</button>
+    </div>
+  </div>
+
+  <div id="history" class="section">
+    <div class="panel">
+      <h2>Son Olaylar</h2>
+      <div id="historyList"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+const HOST="0f3fd00c8f5144f2ab4f1c4603c626b4.s1.eu.hivemq.cloud", PORT=8884, PATH="/mqtt";
+let client=null, state=[false,false,false,false,false], remaining=[0,0,0,0,0], setTime=[0,0,0,0,0];
+let history=JSON.parse(localStorage.getItem("agrinova_history")||"[]");
+let lastDeviceMessage=0, deviceOnline=false, offlineWarned=false;
+
+function topic(t,ch){return `agrinova/esp32/ch${ch}/${t}`}
+
+function build(){
+  const box=document.getElementById("cards"); box.innerHTML="";
+  for(let ch=1;ch<=5;ch++) box.innerHTML+=`
+  <div class="card">
+    <div class="headrow"><div class="relay-name">CH${ch}</div><div id="state${ch}" class="state">OFF</div></div>
+    <div class="remaining"><span id="rem${ch}">0</span> <small>saniye kalan</small></div>
+    <div class="timerow"><input id="time${ch}" type="number" min="0" max="65535" value="0"><button class="save" onclick="setDuration(${ch})">SÜRE KAYDET</button></div>
+    <div class="actions"><button class="start" onclick="cmd(${ch},'ON')">START</button><button class="stop" onclick="cmd(${ch},'OFF')">STOP</button></div>
+    <div id="msg${ch}" class="msg"></div>
+  </div>`;
+}
+function showTab(id,btn){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");}
+function setStatus(t,on=false){const e=document.getElementById("status");e.classList.toggle("online",on);e.classList.toggle("offline",!on&&t.includes("OFFLINE"));document.getElementById("statusText").textContent=t}
+function update(ch){
+  const s=document.getElementById("state"+ch),r=document.getElementById("rem"+ch),t=document.getElementById("time"+ch);
+  s.textContent=state[ch-1]?"ON":"OFF";s.className="state "+(state[ch-1]?"on":"");r.textContent=remaining[ch-1];
+  if(document.activeElement!==t)t.value=setTime[ch-1];
+}
+function msg(ch,t){document.getElementById("msg"+ch).textContent=t;setTimeout(()=>{const e=document.getElementById("msg"+ch);if(e)e.textContent=""},2200)}
+
+function logEvent(ch,ev,when=Date.now()){
+  history.unshift({ch,ev,when});
+  if(history.length>500)history=history.slice(0,500);
+  localStorage.setItem("agrinova_history",JSON.stringify(history)); renderHistory(); updateStats();
+}
+function renderHistory(){
+  const e=document.getElementById("historyList");
+  if(!history.length){e.innerHTML='<div class="small">Henüz kayıt yok.</div>';return}
+  e.innerHTML=history.slice(0,80).map(x=>`<div class="event"><b>CH${x.ch}</b> ${x.ev} — ${new Date(x.when).toLocaleString("tr-TR")}</div>`).join("");
+}
+function updateStats(){
+  const now=new Date(), startDay=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(), startWeek=startDay-6*86400000;
+  let today=0,week=0;
+  for(let ch=1;ch<=5;ch++){
+    let open=null;
+    const arr=history.filter(x=>x.ch===ch).sort((a,b)=>a.when-b.when);
+    for(const x of arr){
+      if(x.ev==="ON")open=x.when;
+      if(x.ev==="OFF"&&open!==null){
+        today+=overlap(open,x.when,startDay,Date.now());
+        week+=overlap(open,x.when,startWeek,Date.now());
+        open=null;
+      }
+    }
+    if(open!==null){
+      today+=overlap(open,Date.now(),startDay,Date.now());
+      week+=overlap(open,Date.now(),startWeek,Date.now());
+    }
+  }
+  document.getElementById("todayTotal").textContent=Math.round(today/60000)+" dk";
+  document.getElementById("weekTotal").textContent=Math.round(week/60000)+" dk";
+}
+function overlap(a,b,s,e){return Math.max(0,Math.min(b,e)-Math.max(a,s))}
+function clearHistory(){if(confirm("Yerel geçmiş silinsin mi?")){history=[];localStorage.removeItem("agrinova_history");renderHistory();updateStats()}}
+
+function connectMQTT(){
+  const u=document.getElementById("username").value.trim();
+  const p=document.getElementById("password").value;
+  const remember=document.getElementById("remember").checked;
+  if(!u||!p){
+    document.getElementById("loginMsg").textContent="Kullanıcı adı ve şifre gerekli.";
+    return;
+  }
+
+  if(remember){
+    localStorage.setItem("agrinova_username",u);
+    localStorage.setItem("agrinova_password",p);
+  }else{
+    localStorage.removeItem("agrinova_username");
+    localStorage.removeItem("agrinova_password");
+  }
+
+  if(client)try{client.end(true)}catch(e){}
+  setStatus("Bağlanıyor...");
+  document.getElementById("loginMsg").textContent="HiveMQ'ya bağlanılıyor...";
+
+  client=mqtt.connect(`wss://${HOST}:${PORT}${PATH}`,{
+    username:u,
+    password:p,
+    clientId:"agrinova_phone_"+Math.random().toString(16).slice(2),
+    clean:true,
+    reconnectPeriod:3000,
+    connectTimeout:10000,
+    keepalive:30
+  });
+
+  client.on("connect",()=>{
+    setStatus("HiveMQ bağlı",true);
+    document.getElementById("loginMsg").textContent="Bağlantı başarılı.";
+    client.subscribe("agrinova/esp32/status");
+    for(let ch=1;ch<=5;ch++){
+      client.subscribe(topic("state",ch));
+      client.subscribe(topic("remaining",ch));
+      client.subscribe(topic("settime",ch));
+    }
+    if("Notification" in window && Notification.permission==="default")
+      Notification.requestPermission();
+  });
+  client.on("reconnect",()=>setStatus("Yeniden bağlanıyor..."));
+  client.on("close",()=>setStatus("Bağlantı yok"));
+  client.on("error",e=>{
+    document.getElementById("loginMsg").textContent="MQTT hatası: "+(e.message||e);
+  });
+  client.on("message",(t,payload)=>{
+    const msgText=payload.toString();
+    lastDeviceMessage=Date.now();
+
+    if(t==="agrinova/esp32/status"){
+      const old=deviceOnline;
+      deviceOnline=msgText==="ONLINE";
+      setStatus(deviceOnline?"ESP32 ONLINE":"ESP32 OFFLINE",deviceOnline);
+      if(deviceOnline&&!old) notify("AGRINOVA","ESP32 yeniden ONLINE oldu.");
+      if(!deviceOnline&&old) notify("AGRINOVA","ESP32 OFFLINE oldu!");
+      return;
+    }
+
+    const m2=t.match(/^agrinova\/esp32\/ch([1-5])\/(state|remaining|settime)$/);
+    if(!m2)return;
+
+    const ch=Number(m2[1]), type=m2[2];
+    if(type==="state"){
+      const nv=msgText==="ON";
+      if(nv!==state[ch-1]){
+        state[ch-1]=nv;
+        logEvent(ch,nv?"ON":"OFF");
+        notify("AGRINOVA",`CH${ch} ${nv?"çalıştı":"durdu"}`);
+      }
+    }else if(type==="remaining"){
+      remaining[ch-1]=Number(msgText)||0;
+    }else{
+      setTime[ch-1]=Number(msgText)||0;
+    }
+    update(ch);
+  });
+}
+function notify(title,text){if("Notification"in window&&Notification.permission==="granted")try{new Notification(title,{body:text})}catch(e){}}
+function cmd(ch,c){
+  if(!client||!client.connected){msg(ch,"Önce HiveMQ'ya bağlan.");return}
+  client.publish(topic("cmd",ch),c,{qos:0,retain:false});msg(ch,"Gönderildi: "+c);
+}
+function setDuration(ch){
+  if(!client||!client.connected){msg(ch,"Önce HiveMQ'ya bağlan.");return}
+  let v=Math.floor(Number(document.getElementById("time"+ch).value));if(!Number.isFinite(v)||v<0)v=0;if(v>65535)v=65535;
+  client.publish(topic("settime",ch),String(v),{qos:0,retain:true});setTime[ch-1]=v;update(ch);msg(ch,`CH${ch}: ${v} saniye`);
+}
+setInterval(()=>{if(deviceOnline&&lastDeviceMessage&&Date.now()-lastDeviceMessage>45000){deviceOnline=false;setStatus("ESP32 OFFLINE",false);if(!offlineWarned){notify("AGRINOVA","ESP32 bağlantısı kesildi!");offlineWarned=true}}if(deviceOnline)offlineWarned=false;updateStats()},5000);
+(function restoreLogin(){
+  const u=localStorage.getItem("agrinova_username");
+  const p=localStorage.getItem("agrinova_password");
+  if(u) document.getElementById("username").value=u;
+  if(p){
+    document.getElementById("password").value=p;
+    document.getElementById("remember").checked=true;
+    setTimeout(()=>connectMQTT(),300);
+  }
+})();
+build();renderHistory();updateStats();for(let ch=1;ch<=5;ch++)update(ch);
+if("serviceWorker"in navigator&&location.protocol!=="file:")navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>

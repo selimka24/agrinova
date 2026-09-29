@@ -1,0 +1,10 @@
+{
+  "name": "AGRINOVA Otomasyon",
+  "short_name": "AGRINOVA",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#eef2f5",
+  "theme_color": "#17202a",
+  "lang": "tr",
+  "icons": []
+}
